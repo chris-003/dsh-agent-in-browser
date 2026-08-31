@@ -15,7 +15,7 @@ channel is bidirectional: the agent sends commands via `tool_call`, the extensio
 executes them and replies.
 
 ```
-DSH agent ──tool_call──▶ @chris/agent-in-browser (Host: WS server @127.0.0.1:port)
+DSH agent ──tool_call──▶ @chris-003/agent-in-browser (Host: WS server @127.0.0.1:port)
    Host plugin ◀──── WebSocket (persistent, token handshake + heartbeat) ──── Chrome extension
                                                                         │
                                           ┌─────────────────────────────┴──────────────┐
@@ -33,7 +33,7 @@ DSH agent ──tool_call──▶ @chris/agent-in-browser (Host: WS server @127
 
 ```
 .
-├── agent-in-browser/        # DSH bundle package @chris/agent-in-browser
+├── agent-in-browser/        # DSH bundle package @chris-003/agent-in-browser
 │   ├── package.json         # dsh.bundle.patch = ./cordis.patch.yml
 │   ├── cordis.patch.yml     # mounts the agent-in-browser plugin row
 │   ├── lib/
@@ -105,14 +105,14 @@ bash scripts/dsh-mount.sh            # mount (idempotent)
 bash scripts/dsh-mount.sh --status   # check mount state
 ```
 
-The script adds `@chris/agent-in-browser` to the web profile's `dependencies`
+The script adds `@chris-003/agent-in-browser` to the web profile's `dependencies`
 (`link:<abs path>`) and `dsh.profile.bundles`, then runs `pnpm install` (or `npm install`
 fallback) in the profile dir. Then **restart/reload the DSH Web UI** for the plugin to
 take effect: the agent sees the `browser_*` tools and the WS server listens on
 `127.0.0.1:<port>`.
 
 > To install a physical copy instead of a symlink, copy the package into the profile's
-> `node_modules` (e.g. `cp -r agent-in-browser <profile>/node_modules/@chris/agent-in-browser`)
+> `node_modules` (e.g. `cp -r agent-in-browser <profile>/node_modules/@chris-003/agent-in-browser`)
 > rather than relying on the `link:` dependency. pnpm turns local path deps into hard links,
 > so `package-import-method=copy` does not give you a true independent copy.
 

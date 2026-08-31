@@ -1,5 +1,5 @@
 // Shared wire protocol between the DeepSeek Harness side
-// (@chris/agent-in-browser host plugin) and the Chrome extension.
+// (@chris-003/agent-in-browser host plugin) and the Chrome extension.
 // Plain JS mirror of `chrome-extension/src/protocol/types.ts`; keep in sync.
 
 export const ACTION_NAMES = [

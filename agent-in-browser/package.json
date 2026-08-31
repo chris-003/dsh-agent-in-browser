@@ -1,5 +1,5 @@
 {
-  "name": "@chris/agent-in-browser",
+  "name": "@chris-003/agent-in-browser",
   "version": "0.1.0",
   "description": "DeepSeek Harness plugin that exposes a WebSocket server for a Chrome extension, giving the agent browser control (read page, screenshot, interact, tabs) via new tool calls.",
   "type": "module",

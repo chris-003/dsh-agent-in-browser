@@ -28,7 +28,7 @@ function App() {
       <h1>agent-in-browser 选项</h1>
       <label>DSH 服务端地址（WebSocket）</label>
       <input value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="ws://127.0.0.1:38745" />
-      <p className="hint">插件以此地址连接 DeepSeek Harness 侧 @chris/agent-in-browser 的 WebSocket 服务端。需与 DSH 侧 cordis.patch.yml 的 port 对齐。</p>
+      <p className="hint">插件以此地址连接 DeepSeek Harness 侧 @chris-003/agent-in-browser 的 WebSocket 服务端。需与 DSH 侧 cordis.patch.yml 的 port 对齐。</p>
       <label>令牌（token）</label>
       <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="agent-in-browser" />
       <p className="hint">需与 DSH 侧 cordis.patch.yml 的 token 一致。</p>

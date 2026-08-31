@@ -1,9 +1,9 @@
-# @chris/agent-in-browser profile bundle patch.
+# @chris-003/agent-in-browser profile bundle patch.
 # Loaded by the dsh profile (`dsh.profile.bundles`). Mounts the plugin row that
 # starts the WebSocket server and registers the browser tools.
 - insert:
     - id: agent-in-browser
-      name: '@chris/agent-in-browser'
+      name: '@chris-003/agent-in-browser'
       config:
         port: 38745
         token: agent-in-browser

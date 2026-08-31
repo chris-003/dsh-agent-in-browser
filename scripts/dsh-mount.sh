@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mount @chris/agent-in-browser into the DeepSeek Harness web profile.
+# Mount @chris-003/agent-in-browser into the DeepSeek Harness web profile.
 #
 # Run this from YOUR shell (not from inside the agent), because it writes to
 # ~/.dsh (the DSH persistent config), which the agent sandbox cannot touch.
@@ -17,7 +17,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 PROFILE_DIR="$HOME/.dsh/profiles/web"
 PACKAGE="$ROOT/agent-in-browser"
-PKG_NAME="@chris/agent-in-browser"
+PKG_NAME="@chris-003/agent-in-browser"
 PROFILE_PKG="$PROFILE_DIR/package.json"
 
 if [[ "${1:-}" == "--status" ]]; then
@@ -28,8 +28,8 @@ if [[ "${1:-}" == "--status" ]]; then
   else
     echo "STATUS: not mounted"
   fi
-  echo "linked dir: ${PROFILE_DIR}/node_modules/@chris/agent-in-browser"
-  [[ -e "$PROFILE_DIR/node_modules/@chris/agent-in-browser" ]] && echo "  -> link exists" || echo "  -> no link (run install)"
+  echo "linked dir: ${PROFILE_DIR}/node_modules/@chris-003/agent-in-browser"
+  [[ -e "$PROFILE_DIR/node_modules/@chris-003/agent-in-browser" ]] && echo "  -> link exists" || echo "  -> no link (run install)"
   exit 0
 fi
 

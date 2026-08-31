@@ -1,4 +1,4 @@
-// @chris/agent-in-browser client half (browser).
+// @chris-003/agent-in-browser client half (browser).
 //
 // Loaded by the web UI through window.__ModuleLoader__.load({ id, factory }),
 // the factory's `require` resolving externals (React is provided by the shell).
@@ -7,7 +7,7 @@
 // + "恢复默认" link, and a "放弃修改 / 保存" footer. Reads/writes the settings
 // namespace the host serves.
 window.__ModuleLoader__.load({
-  id: '@chris/agent-in-browser',
+  id: '@chris-003/agent-in-browser',
   factory: (require) => {
     var module = { exports: {} }
     var exports = module.exports

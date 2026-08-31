@@ -1,5 +1,5 @@
 // Dynamic Cordis plugin HOST body (plain JS, for `cordis_define`) — the
-// "for testing" form of @chris/agent-in-browser.
+// "for testing" form of @chris-003/agent-in-browser.
 //
 // Registers the browser_* tools, and tries to serve the WebSocket channel by
 // spawning a standalone bridge server (`./bridge-server.mjs`) via the

@@ -1,4 +1,4 @@
-// @chris/agent-in-browser host plugin entry (Cordis contract).
+// @chris-003/agent-in-browser host plugin entry (Cordis contract).
 //
 // Serves an editable settings namespace (`agent-in-browser`) in the DSH web
 // settings, so the plugin appears under 设置 → 插件 → 插件配置, and reads its
