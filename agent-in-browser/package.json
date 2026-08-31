@@ -14,10 +14,13 @@
     "./protocol": {
       "default": "./lib/protocol/types.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "files": [
-    "lib"
+    "lib",
+    "cordis.patch.yml",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {
