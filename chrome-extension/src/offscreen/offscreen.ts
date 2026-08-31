@@ -44,6 +44,7 @@ async function connect() {
         actions: [...ACTION_NAMES],
       }),
     )
+    chrome.storage.local.set({ connected: true, serverUrl: url })
   }
 
   ws.onmessage = (ev) => {
@@ -63,6 +64,7 @@ async function connect() {
   }
 
   ws.onclose = () => {
+    chrome.storage.local.set({ connected: false }).catch(() => {})
     if (stopped) return
     setTimeout(() => void connect(), reconnectDelay)
     reconnectDelay = Math.min(reconnectDelay * 2, 15000)

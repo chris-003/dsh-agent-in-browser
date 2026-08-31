@@ -2,7 +2,7 @@
 
 Chrome 浏览器插件 + DeepSeek Harness 配套插件，让 DSH 的 agent 能通过 `tool_call` 实时读取/操控用户正在浏览的网页，并可在浏览器侧边栏打开 DSH WebUI（规划中）。
 
-> 当前进度：**M1 最小闭环**（`browser_get_page` 等 + 本地 WebSocket 通道）+ **M3 动作层**（截图 visible/region/full、点击/输入/滚动/按键/选择/等待、导航、标签页管理、storage、复制）已实现并可构建。M2（WebUI 配置卡片）、M3 UI（popup/options/sidepanel）、M4（文档完备）见路线图。
+> 当前进度：**M1 最小闭环**（`browser_get_page` 等 + 本地 WebSocket 通道）、**M3 动作层**（截图、DOM 交互、导航、标签页、storage、复制）、**M3 UI**（popup / options / sidepanel 内嵌 DSH WebUI）均已实现并可构建。M2（WebUI 配置卡片）、M4（文档完备）见路线图。
 
 ## 目录结构
 
@@ -19,12 +19,16 @@ mooc/
 │   └── test/server.smoke.mjs# 独立通道冒烟测试
 ├── chrome-extension/        # Chrome 扩展（Vite+TS+React，MV3）
 │   ├── public/manifest.json
+│   ├── offscreen.html            # 内嵌 DSH WebUI 的侧边栏（M3）
+│   ├── popup.html / options.html # 弹窗 / 选项页（M3）
 │   ├── vite.config.ts / tsconfig.json / package.json
 │   └── src/
 │       ├── protocol/types.ts    # 协议镜像
-│       ├── background/service-worker.ts  # 命令路由 + 标签页/窗口级动作
-│       ├── offscreen/offscreen.html|ts   # 持持久 WebSocket 连接
-│       └── (popup/options/sidepanel/content 为 M3 预留)
+│       ├── background/service-worker.ts  # 全部动作命令路由 + 标签页/窗口级处理
+│       ├── offscreen/offscreen.ts        # 持持久 WebSocket 连接 + 区域截图裁剪
+│       ├── popup/main.tsx        # 连接状态 + 「在侧边栏中打开」+ 选项入口
+│       ├── options/main.tsx      # 服务地址/令牌/WebUI 地址配置
+│       └── sidepanel/main.tsx    # 内嵌 DSH WebUI 的 iframe
 ├── scripts/dsh-mount.sh     # 由你运行：把 bundle 挂进 DSH web profile
 └── README.md
 ```
@@ -109,6 +113,6 @@ bash scripts/dsh-mount.sh --status   # 查看是否已挂载
 ## 路线图
 
 - **M1 最小闭环** ✅：WS 服务端 + 工具注册 + 扩展 offscreen 连接 + `get_page`。
-- **M2 WebUI 配置卡片**：Client 半注册 `settings.plugin.item` 卡片，可在「设置→插件」改端口/令牌；验证 bundle 挂载。
-- **M3 扩展完整功能**：popup（连接状态 + 侧边栏入口 + 选项）、options（服务地址/令牌）、sidepanel（内嵌 DSH WebUI）；实现全部动作（页面 DOM 交互、截图）。
-- **M4 集成与文档**：断线重连/心跳/超时、无连接可读报错、权限说明、发布说明。
+- **M3 动作层 + UI** ✅：全部动作（截图/DOM 交互/导航/标签页/storage/复制）+ popup/options/sidepanel。
+- **M2 WebUI 配置卡片** ⬜：Client 半注册 `settings.plugin.item` 卡片，可在「设置→插件」改端口/令牌；验证 bundle 挂载。
+- **M4 集成与文档** ⬜：断线重连/心跳/超时、无连接可读报错、权限说明、发布说明。

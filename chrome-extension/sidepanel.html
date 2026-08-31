@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>agent-in-browser 侧边栏</title>
+    <style>
+      html, body { margin: 0; height: 100%; }
+      body { display: flex; flex-direction: column; }
+      iframe { flex: 1; width: 100%; border: 0; }
+      .bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font: 12px/1.4 system-ui, sans-serif; border-bottom: 1px solid #e5e7eb; color: #374151; }
+      .bar b { font-size: 13px; }
+      .bar a { margin-left: auto; color: #2563eb; text-decoration: none; }
+    </style>
+    <script type="module" src="./src/sidepanel/main.tsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
