@@ -1,10 +1,10 @@
 # dsh-agent-in-browser
 
+> **[English](./README.md) | [中文](./README.zh.md)**
+
 A Chrome extension + DeepSeek Harness (DSH) companion plugin that lets a DSH agent
 read and drive the browser you are actually using, in real time, through ordinary
 `tool_call`s — and optionally embeds the DSH Web UI in a browser side panel.
-
-中文简介：让 DSH 的 agent 能通过 `tool_call` 实时读取/操控你当前浏览的网页（截图、DOM 交互、导航、标签页、storage、复制），并可在浏览器侧边栏内嵌 DSH WebUI。
 
 ## How it works
 
@@ -17,11 +17,11 @@ executes them and replies.
 ```
 DSH agent ──tool_call──▶ @chris-003/agent-in-browser (Host: WS server @127.0.0.1:port)
    Host plugin ◀──── WebSocket (persistent, token handshake + heartbeat) ──── Chrome extension
-                                                                        │
-                                          ┌─────────────────────────────┴──────────────┐
-                                          │ service-worker: tab/window-level actions    │
-                                          │ content-script: page DOM interaction        │
-                                          └──────────────────────────────────────────────┘
+                                                                         │
+                                           ┌─────────────────────────────┴──────────────┐
+                                           │ service-worker: tab/window-level actions    │
+                                           │ content-script: page DOM interaction        │
+                                           └──────────────────────────────────────────────┘
 ```
 
 - **Frame protocol** — request `{type:'command', id, action, params}` → response
@@ -91,9 +91,9 @@ node agent-in-browser/dynamic/bridge-smoke.mjs  # bridge smoke
 
 - **DSH side**: `agent-in-browser/cordis.patch.yml` → `config.port` / `config.token`
   (default `38745` / `agent-in-browser`). These can also be edited from the DSH Web UI
-  under **设置 → 插件 → 插件配置**, which persists to the user settings layer.
+  under **Settings → Plugins → Plugin Config**, which persists to the user settings layer.
 - **Extension side**: stored in `chrome.storage.local` (`serverUrl`, `token`, `webuiUrl`),
-  editable on the options page (M3).
+  editable on the options page.
 
 ## Mount the DSH plugin
 
@@ -164,7 +164,7 @@ node agent-in-browser/dynamic/bridge-smoke.mjs    # feed commands via stdin -> W
 - **M3 action layer + UI** ✅: all actions (screenshot/DOM interaction/navigation/tabs/
   storage/copy) + popup/options/sidepanel.
 - **M2 WebUI config card** ✅: Client half registers the `settings.plugin.item` card to edit
-  port/token under 设置→插件; bundle mount verified.
+  port/token under Settings→Plugins; bundle mount verified.
 - **M4 integration & docs** ⬜: reconnect/heartbeat/timeout hardening, no-connection readable
   errors, permission notes, release notes.
 
