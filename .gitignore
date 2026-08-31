@@ -10,3 +10,9 @@ dist/
 
 # Chrome extension build output
 chrome-extension/dist/
+
+# Firefox extension build output / local npm dirs
+firefox-extension/dist/
+firefox-extension/node_modules/
+firefox-extension/.npm-cache/
+firefox-extension/.npm-logs/
