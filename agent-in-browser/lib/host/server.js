@@ -24,6 +24,29 @@ export class AgentInBrowserServer {
     return this.connected
   }
 
+  // Apply new effective config and rebind (stop+start) if any listener-facing
+  // field changed. Returns whether a rebind happened. Reusing the same object
+  // keeps any `send`-bound tool closures valid across config changes.
+  applyConfig(opts = {}) {
+    const next = {
+      host: opts.host ?? this.host,
+      port: opts.port ?? this.port,
+      token: opts.token ?? this.token,
+      commandTimeoutMs: opts.commandTimeoutMs ?? this.commandTimeoutMs,
+    }
+    const changed =
+      next.host !== this.host ||
+      next.port !== this.port ||
+      next.token !== this.token ||
+      next.commandTimeoutMs !== this.commandTimeoutMs
+    Object.assign(this, next)
+    if (changed && this.server) {
+      this.stop()
+      this.start()
+    }
+    return changed
+  }
+
   start() {
     if (this.server) return
     this.server = new WebSocketServer({ host: this.host, port: this.port })
