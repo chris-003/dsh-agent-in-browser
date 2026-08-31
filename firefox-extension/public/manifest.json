@@ -1,0 +1,28 @@
+{
+  "manifest_version": 2,
+  "name": "agent-in-browser",
+  "version": "0.1.0",
+  "description": "Bridge between DeepSeek Harness (@chris-003/agent-in-browser) and the browser: read the active page, screenshot, interact, and manage tabs via a local WebSocket.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "clipboardWrite",
+    "<all_urls>"
+  ],
+  "background": {
+    "page": "background.html",
+    "persistent": true
+  },
+  "browser_action": {
+    "default_title": "agent-in-browser",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html"
+  },
+  "sidebar_action": {
+    "default_title": "agent-in-browser",
+    "default_panel": "sidepanel.html"
+  }
+}
