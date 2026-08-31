@@ -1,8 +1,12 @@
-// MV3 service worker: command router and tab/window-level action handlers.
-// Receives frames from the offscreen WebSocket holder, executes them, and
-// returns a result. DOM interaction is done via chrome.scripting.executeScript
-// with self-contained functions (no separate content-script file needed).
+// MV3 service worker: owns the persistent WebSocket to the DSH server and the
+// command router / tab, window, and DOM action handlers. DOM interaction is via
+// chrome.scripting.executeScript with self-contained functions. The offscreen
+// document is used ONLY on demand for the region-screenshot canvas crop.
 import {
+  ACTION_NAMES,
+  DEFAULT_SERVER_URL,
+  DEFAULT_TOKEN,
+  PROTOCOL_VERSION,
   type CommandFrame,
   type ResultFrame,
   type TabInfo,
@@ -12,20 +16,116 @@ import {
 
 const OFFSCREEN_URL = 'offscreen.html'
 
-async function ensureOffscreen() {
+// ---------------------------------------------------------------------------
+// WebSocket client (lives in the SW; Chrome 116+ keeps the SW alive while an
+// active WebSocket is open). Holds the channel to the DSH server.
+// ---------------------------------------------------------------------------
+
+let ws: WebSocket | null = null
+let reconnectDelay = 1000
+let heartbeat: ReturnType<typeof setInterval> | null = null
+
+function setStatus(conn: 'connecting' | 'connected' | 'disconnected' | 'error', error?: string) {
+  void chrome.storage.local.set({ connected: conn === 'connected', status: conn, ...(error ? { lastError: error } : {}) })
+}
+
+async function connectToServer() {
+  const cfg = await chrome.storage.local.get(['serverUrl', 'token'])
+  const url = (cfg.serverUrl as string) || DEFAULT_SERVER_URL
+  const token = (cfg.token as string) || DEFAULT_TOKEN
+
+  setStatus('connecting')
+  let socket: WebSocket
+  try {
+    socket = new WebSocket(url)
+  } catch (e: any) {
+    setStatus('error', String(e?.message ?? e))
+    return
+  }
+  ws = socket
+
+  socket.onopen = () => {
+    reconnectDelay = 1000
+    clearInterval(heartbeat ?? undefined)
+    heartbeat = setInterval(() => ws?.send(JSON.stringify({ type: 'ping' })), 25000)
+    socket.send(
+      JSON.stringify({
+        type: 'hello',
+        token,
+        version: PROTOCOL_VERSION,
+        actions: [...ACTION_NAMES],
+      }),
+    )
+    setStatus('connected')
+    void chrome.storage.local.set({ serverUrl: url })
+  }
+
+  socket.onmessage = (ev) => {
+    let frame: any
+    try {
+      frame = JSON.parse(ev.data)
+    } catch {
+      return
+    }
+    if (frame.type === 'ping') {
+      socket.send(JSON.stringify({ type: 'pong' }))
+      return
+    }
+    if (frame.type === 'command') {
+      dispatch(frame as CommandFrame).then((res) => {
+        try {
+          socket.send(JSON.stringify(res))
+        } catch {}
+      })
+    }
+  }
+
+  socket.onclose = () => {
+    clearInterval(heartbeat ?? undefined)
+    heartbeat = null
+    setStatus('disconnected')
+    console.warn(`[agent-in-browser] socket closed (${url}); reconnecting in ${reconnectDelay}ms`)
+    setTimeout(() => void connectToServer(), reconnectDelay)
+    reconnectDelay = Math.min(reconnectDelay * 2, 15000)
+  }
+  socket.onerror = (ev: Event) => {
+    const msg = (ev as any)?.message ?? (ev as any)?.error?.message ?? 'WebSocket error'
+    setStatus('error', String(msg))
+    console.error('[agent-in-browser] connection error:', msg)
+    try { socket.close() } catch {}
+  }
+}
+
+function reconnectNow() {
+  const old = ws
+  ws = null
+  try { old?.close() } catch {}
+  void connectToServer()
+}
+
+// Create the offscreen document (canvas crop only) and return whether it exists.
+async function ensureOffscreen(): Promise<boolean> {
   if (chrome.offscreen && typeof chrome.offscreen.hasDocument === 'function') {
     const has = await chrome.offscreen.hasDocument()
-    if (has) return
+    if (has) return true
   }
   try {
     await chrome.offscreen.createDocument({
       url: OFFSCREEN_URL,
       reasons: ['WORKERS'],
-      justification: 'Hold a persistent WebSocket connection to the agent-in-browser server.',
+      justification: 'Crop a captured screenshot region for the agent-in-browser tool.',
     })
+    return true
   } catch {
-    // Already exists or unsupported; the socket holder tolerates this.
+    return false
   }
+}
+
+async function cropViaOffscreen(dataUrl: string, x: number, y: number, width: number, height: number): Promise<string> {
+  await ensureOffscreen()
+  const res = await chrome.runtime.sendMessage({ kind: 'util', util: 'crop', dataUrl, x, y, width, height })
+  if (!res?.ok) throw new Error(res?.error || 'region crop failed')
+  return (res.data as string) ?? ''
 }
 
 async function activeTabId() {
@@ -233,18 +333,7 @@ async function handleScreenshotRegion(regionSelector: string, format: 'png' | 'j
   if (!bounds) throw new Error(`region selector matched nothing: ${regionSelector}`)
   const win = await chrome.windows.getCurrent()
   const dataUrl = await chrome.tabs.captureVisibleTab(win.id ?? undefined, { format, quality })
-  // Crop via the offscreen document (it has canvas access).
-  const cropped = await chrome.runtime.sendMessage({
-    kind: 'util',
-    util: 'crop',
-    dataUrl,
-    x: bounds.x,
-    y: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
-  })
-  if (!cropped?.ok) throw new Error(cropped?.error || 'region crop failed')
-  const image = (cropped.data as string) ?? ''
+  const image = await cropViaOffscreen(dataUrl, bounds.x, bounds.y, bounds.width, bounds.height)
   return { image, mime: 'image/png', bytes: Math.floor(image.length * 3 / 4), width: bounds.width, height: bounds.height }
 }
 
@@ -501,13 +590,10 @@ async function dispatch(frame: CommandFrame): Promise<ResultFrame> {
 
 chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
   if (!msg) return false
-  if (msg.type === 'AIRBY' && msg.frame?.type === 'command') {
-    dispatch(msg.frame as CommandFrame).then(
-      (r) => sendResponse(r),
-      (e: any) =>
-        sendResponse({ type: 'result', id: msg.frame.id, ok: false, error: String(e?.message ?? e), code: 'EXEC' }),
-    )
-    return true
+  if (msg.kind === 'RECONNECT') {
+    reconnectNow()
+    sendResponse({ ok: true })
+    return false
   }
   if (msg.kind === 'PING') {
     sendResponse({ ok: true })
@@ -516,6 +602,6 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
   return false
 })
 
-chrome.runtime.onInstalled.addListener(() => void ensureOffscreen())
-chrome.runtime.onStartup.addListener(() => void ensureOffscreen())
-void ensureOffscreen()
+chrome.runtime.onInstalled.addListener(() => void connectToServer())
+chrome.runtime.onStartup.addListener(() => void connectToServer())
+void connectToServer()
