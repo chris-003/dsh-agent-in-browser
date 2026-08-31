@@ -16,6 +16,10 @@ mooc/
 │   │   ├── host/server.js   # WebSocket 服务端（令牌握手/请求-响应/超时）
 │   │   ├── host/tools.js    # 注册 browser_* 新工具（defineTool）
 │   │   └── protocol/types.js# 帧协议与动作常量（与扩展镜像）
+│   ├── dynamic/
+│   │   ├── bridge-server.mjs# 独立 WS 服务端 + stdin/stdout 命令桥（可单独 `node` 跑）
+│   │   ├── bridge-smoke.mjs # 该桥的端到端冒烟测试（已 PASS）
+│   │   └── plugin.host.js   # 「用于测试」的动态 Cordis 插件源码（cordis_define 用）
 │   └── test/server.smoke.mjs# 独立通道冒烟测试
 ├── chrome-extension/        # Chrome 扩展（Vite+TS+React，MV3）
 │   ├── public/manifest.json
@@ -102,6 +106,24 @@ bash scripts/dsh-mount.sh --status   # 查看是否已挂载
 `browser_get_page`、`browser_read`、`browser_extract`、`browser_find_element`、`browser_list_tabs`、`browser_activate_tab`、`browser_open_tab`、`browser_close_tab`、`browser_screenshot`、`browser_click`、`browser_type`、`browser_scroll`、`browser_navigate`、`browser_press`、`browser_select`、`browser_wait`、`browser_storage`、`browser_copy`。
 
 > 实现状态：`get_page`、`read_page`、`extract`、`find_element`、`list_tabs`、`activate_tab`、`open_tab`、`close_tab`、`screenshot`（visible/region/full）、`click`、`type`、`scroll`、`navigate`、`press`、`select`、`wait`、`storage_get/set`、`copy` 均已在扩展 SW / offscreen 实现。
+
+## 测试用动态 Cordis 插件
+
+除了「作为 bundle 挂载」的生产路径，还提供了一份**动态 Cordis 插件**（`cordis_define` 即用）供快速测试工具表面。
+
+**重要限制**：动态 Host 插件**不能**直接充当 WebSocket 服务端——动态代码禁止 `import`/`require`（拿不到 `ws`），且宿主没有 `crypto` 内置，无法手工完成 WebSocket 握手（HTTP-upgrade 由 `webServer` 交回裸 `Duplex` socket）。因此动态插件用 `ctx.get('subprocess')` **spawn 一个独立 Node 进程**（`dynamic/bridge-server.mjs`，可 `import ws`）来跑服务端，工具调用经该进程的 stdin/stdout 桥接。
+
+```bash
+# 1) 独立跑 bridge（不依赖 subprocess / DSH 挂载）——已验证：
+node agent-in-browser/dynamic/bridge-server.mjs            # 监听 ws://127.0.0.1:38745
+node agent-in-browser/dynamic/bridge-smoke.mjs             # 冒烟：stdin 喂命令 → WS → stdout 回结果
+
+# 2) 动态插件：用 cordis_define 定义 cold 后 cordis_run，
+#    它会注册浏览器工具并（若 subprocess 已挂载）spawn bridge-server。
+#    源码见 agent-in-browser/dynamic/plugin.host.js（已在本会话成功注册全部 browser_* 工具）。
+```
+
+> ⚠️ 当前部署未启用 `subprocess` 服务，因此动态插件在本机只**注册了工具**（已验证出现在工具列表），bridge 不会自动拉起；实际通道请用 **bundle 挂载**（生产路径）或手动运行 `bridge-server.mjs`。
 
 ## 权限说明（manifest）
 
