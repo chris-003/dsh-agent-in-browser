@@ -19,6 +19,10 @@ let reconnectDelay = 1000
 let stopped = false
 let heartbeat: ReturnType<typeof setInterval> | null = null
 
+function setStatus(conn: 'connecting' | 'connected' | 'disconnected' | 'error', error?: string) {
+  void chrome.storage.local.set({ connected: conn === 'connected', status: conn, ...(error ? { lastError: error } : {}) })
+}
+
 async function readConfig(): Promise<StoredConfig> {
   try {
     return (await chrome.storage.local.get(['serverUrl', 'token'])) as StoredConfig
@@ -33,6 +37,7 @@ async function connect() {
   const url = cfg.serverUrl || DEFAULT_SERVER_URL
   const token = cfg.token || DEFAULT_TOKEN
 
+  setStatus('connecting', undefined)
   ws = new WebSocket(url)
 
   ws.onopen = () => {
@@ -47,7 +52,8 @@ async function connect() {
         actions: [...ACTION_NAMES],
       }),
     )
-    chrome.storage.local.set({ connected: true, serverUrl: url })
+    setStatus('connected')
+    void chrome.storage.local.set({ serverUrl: url })
   }
 
   ws.onmessage = (ev) => {
@@ -69,13 +75,19 @@ async function connect() {
   ws.onclose = () => {
     clearInterval(heartbeat ?? undefined)
     heartbeat = null
-    chrome.storage.local.set({ connected: false }).catch(() => {})
+    setStatus('disconnected')
     if (stopped) return
+    console.warn(`[agent-in-browser] socket closed (url ${url}); reconnecting in ${reconnectDelay}ms`)
     setTimeout(() => void connect(), reconnectDelay)
     reconnectDelay = Math.min(reconnectDelay * 2, 15000)
   }
-  ws.onerror = () => {
-    ws?.close()
+  ws.onerror = (ev: Event) => {
+    const msg = (ev as any)?.message ?? (ev as any)?.error?.message ?? 'WebSocket error'
+    setStatus('error', String(msg))
+    console.error('[agent-in-browser] connection error:', msg)
+    try {
+      ws?.close()
+    } catch {}
   }
 }
 
@@ -100,7 +112,11 @@ async function run(frame: CommandFrame): Promise<ResultFrame> {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return
   if (changes.serverUrl || changes.token) {
-    ws?.close()
+    // Force a fresh connect using the new config.
+    const active = ws
+    ws = null
+    try { active?.close() } catch {}
+    void connect()
   }
 })
 
@@ -109,7 +125,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
   if (!msg) return false
   if (msg.kind === 'RECONNECT') {
-    ws?.close() // onclose schedules a reconnect
+    const active = ws
+    ws = null
+    try { active?.close() } catch {}
+    void connect() // always force a fresh connect, even if ws was null
     sendResponse({ ok: true })
     return false
   }

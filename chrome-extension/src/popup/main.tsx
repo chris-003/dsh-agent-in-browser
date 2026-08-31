@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
-type State = { connected?: boolean; serverUrl?: string; token?: string }
+type State = { connected?: boolean; status?: string; lastError?: string; serverUrl?: string; token?: string }
 
 function App() {
   const [s, setS] = useState<State>({})
 
   useEffect(() => {
-    const load = () => chrome.storage.local.get(['connected', 'serverUrl', 'token']).then((v) => setS(v as State))
+    const load = () =>
+      chrome.storage.local.get(['connected', 'status', 'lastError', 'serverUrl', 'token']).then((v) => setS(v as State))
     void load()
     chrome.storage.onChanged.addListener(() => void load())
   }, [])
+
+  const statusLabel = s.connected ? '已连接 DSH' : s.status === 'connecting' ? '连接中…' : '未连接'
+  const dot = s.connected ? 'on' : s.status === 'connecting' ? 'conn' : 'off'
 
   const openSidePanel = async () => {
     await chrome.sidePanel.setOptions({ path: 'sidepanel.html', enabled: true })
@@ -20,18 +24,18 @@ function App() {
 
   const reconnect = async () => {
     await chrome.runtime.sendMessage({ kind: 'RECONNECT' })
-    // refresh the status readout after a short delay
-    setTimeout(() => chrome.storage.local.get(['connected', 'serverUrl']).then((v) => setS((s) => ({ ...s, ...(v as State) }))), 1000)
+    setTimeout(() => chrome.storage.local.get(['connected', 'status', 'lastError', 'serverUrl']).then((v) => setS((s) => ({ ...s, ...(v as State) }))), 1000)
   }
 
   return (
     <div>
       <h1>agent-in-browser</h1>
       <div className="row">
-        <span className={`dot ${s.connected ? 'on' : 'off'}`} />
-        <span>{s.connected ? '已连接 DSH' : '未连接'}</span>
+        <span className={`dot ${dot}`} />
+        <span>{statusLabel}</span>
         <span className="muted">{s.serverUrl ?? 'ws://127.0.0.1:38745'}</span>
       </div>
+      {s.lastError ? <p className="muted" style={{ color: '#ef4444' }}>{s.lastError}</p> : null}
       <div className="row">
         <button onClick={() => chrome.runtime.openOptionsPage()}>选项</button>
         <button onClick={openSidePanel}>在侧边栏中打开</button>
