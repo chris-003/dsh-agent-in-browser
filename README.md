@@ -59,7 +59,6 @@ DSH agent ──tool_call──▶ @chris-003/agent-in-browser (Host: WS server 
 │       ├── popup/main.tsx               # connection status + side-panel + options entry
 │       ├── options/main.tsx             # server URL / token / WebUI URL config
 │       └── sidepanel/main.tsx           # embedded DSH Web UI iframe
-├── scripts/dsh-mount.sh     # mount the bundle into the DSH web profile
 └── README.md
 ```
 
@@ -98,23 +97,24 @@ node agent-in-browser/dynamic/bridge-smoke.mjs  # bridge smoke
 
 ## Mount the DSH plugin
 
-From your own shell (it writes to `~/.dsh`, which the agent sandbox cannot touch):
+The DSH side (`~/.dsh/profiles/web`) is a pnpm workspace. To make the plugin available
+to DSH, add it to the profile's `dependencies` and `dsh.profile.bundles`, then install:
 
 ```bash
-bash scripts/dsh-mount.sh            # mount (idempotent)
-bash scripts/dsh-mount.sh --status   # check mount state
+# in the web profile dir
+pnpm add "@chris-003/agent-in-browser@link:/absolute/path/to/agent-in-browser"
 ```
 
-The script adds `@chris-003/agent-in-browser` to the web profile's `dependencies`
-(`link:<abs path>`) and `dsh.profile.bundles`, then runs `pnpm install` (or `npm install`
-fallback) in the profile dir. Then **restart/reload the DSH Web UI** for the plugin to
-take effect: the agent sees the `browser_*` tools and the WS server listens on
-`127.0.0.1:<port>`.
+Then ensure `@chris-003/agent-in-browser` is listed in the profile `package.json` under
+`dsh.profile.bundles` (alongside `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app`),
+run `pnpm install`, and **restart/reload the DSH Web UI**. The agent then sees the
+`browser_*` tools and the WS server listens on `127.0.0.1:<port>`.
 
-> To install a physical copy instead of a symlink, copy the package into the profile's
-> `node_modules` (e.g. `cp -r agent-in-browser <profile>/node_modules/@chris-003/agent-in-browser`)
-> rather than relying on the `link:` dependency. pnpm turns local path deps into hard links,
-> so `package-import-method=copy` does not give you a true independent copy.
+> **Note on local path deps**: pnpm installs a `link:` local dependency as a **symlink**
+> (and `package-import-method=copy` does not produce a true independent copy for path
+> deps — they stay hard-linked). To install a real copy that is decoupled from your source
+> tree, copy the package into the profile's `node_modules` instead, e.g.
+> `cp -r agent-in-browser <profile>/node_modules/@chris-003/agent-in-browser`.
 
 ## Agent tools
 
