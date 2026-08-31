@@ -1,0 +1,12 @@
+# Node / build artifacts
+node_modules
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Logs / OS
+*.log
+.DS_Store
+
+# Chrome extension build output
+chrome-extension/dist/
