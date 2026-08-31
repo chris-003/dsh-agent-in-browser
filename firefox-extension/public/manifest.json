@@ -23,6 +23,7 @@
   },
   "sidebar_action": {
     "default_title": "agent-in-browser",
-    "default_panel": "sidepanel.html"
+    "default_panel": "sidepanel.html",
+    "open_at_install": false
   }
 }
