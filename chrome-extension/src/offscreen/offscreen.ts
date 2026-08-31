@@ -17,6 +17,7 @@ interface StoredConfig {
 let ws: WebSocket | null = null
 let reconnectDelay = 1000
 let stopped = false
+let heartbeat: ReturnType<typeof setInterval> | null = null
 
 async function readConfig(): Promise<StoredConfig> {
   try {
@@ -36,6 +37,8 @@ async function connect() {
 
   ws.onopen = () => {
     reconnectDelay = 1000
+    clearInterval(heartbeat ?? undefined)
+    heartbeat = setInterval(() => ws?.send(JSON.stringify({ type: 'ping' })), 25000)
     ws?.send(
       JSON.stringify({
         type: 'hello',
@@ -64,6 +67,8 @@ async function connect() {
   }
 
   ws.onclose = () => {
+    clearInterval(heartbeat ?? undefined)
+    heartbeat = null
     chrome.storage.local.set({ connected: false }).catch(() => {})
     if (stopped) return
     setTimeout(() => void connect(), reconnectDelay)
