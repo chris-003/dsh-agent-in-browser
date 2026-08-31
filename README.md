@@ -2,32 +2,33 @@
 
 > **[English](./README.md) | [中文](./README.zh.md)**
 
-A Chrome extension + DeepSeek Harness (DSH) companion plugin that lets a DSH agent
-read and drive the browser you are actually using, in real time, through ordinary
-`tool_call`s — and optionally embeds the DSH Web UI in a browser side panel.
+A Chrome extension plus a DeepSeek Harness (DSH) plugin. A DSH agent can read and
+drive the browser you are using through `tool_call`s, and optionally embed the DSH
+Web UI in a side panel.
 
 ## How it works
 
-Manifest V3 extensions **cannot listen on a TCP/WebSocket port** (`chrome.sockets.tcpServer`
-is a deprecated Chrome Apps API), so the extension acts as a WebSocket **client**
-and actively connects to a server hosted by the DSH side. Once connected the
-channel is bidirectional: the agent sends commands via `tool_call`, the extension
-executes them and replies.
+Manifest V3 extensions cannot listen on a TCP or WebSocket port
+(`chrome.sockets.tcpServer` is a deprecated Chrome Apps API). The extension therefore
+connects to a server on the DSH side as a WebSocket client. The channel is
+bidirectional: the agent sends a command via `tool_call`, the extension runs it and
+replies.
 
 ```
 DSH agent ──tool_call──▶ @chris-003/agent-in-browser (Host: WS server @127.0.0.1:port)
    Host plugin ◀──── WebSocket (persistent, token handshake + heartbeat) ──── Chrome extension
-                                                                         │
+                                                                          │
                                            ┌─────────────────────────────┴──────────────┐
                                            │ service-worker: tab/window-level actions    │
                                            │ content-script: page DOM interaction        │
                                            └──────────────────────────────────────────────┘
 ```
 
-- **Frame protocol** — request `{type:'command', id, action, params}` → response
-  `{type:'result', id, ok, data|error}`; handshake `{type:'hello', token, version, actions}`;
-  heartbeat `ping/pong`. Constants live in `agent-in-browser/lib/protocol/types.js` and
-  `chrome-extension/src/protocol/types.ts` (**keep the two mirrored copies in sync**).
+- **Frame protocol**: a request is `{type:'command', id, action, params}`, the reply
+  is `{type:'result', id, ok, data|error}`. The handshake is
+  `{type:'hello', token, version, actions}`, heartbeat is `ping/pong`. Constants live
+  in `agent-in-browser/lib/protocol/types.js` and `chrome-extension/src/protocol/types.ts`;
+  keep those two files in sync.
 
 ## Repository layout
 
@@ -84,14 +85,15 @@ node agent-in-browser/dynamic/bridge-smoke.mjs  # bridge smoke
 
 1. Open `chrome://extensions/`, turn on **Developer mode**.
 2. **Load unpacked** → select `chrome-extension/dist`.
-3. Confirm there are no errors. The extension auto-connects to `ws://127.0.0.1:38745`
-   (token `agent-in-browser`) with its defaults, or the values set on the options page.
+3. Confirm there are no errors. The extension connects to `ws://127.0.0.1:38745`
+   (token `agent-in-browser`) by default, or to whatever you set on the options page.
 
 ## Configuration (keep both sides aligned)
 
 - **DSH side**: `agent-in-browser/cordis.patch.yml` → `config.port` / `config.token`
-  (default `38745` / `agent-in-browser`). These can also be edited from the DSH Web UI
-  under **Settings → Plugins → Plugin Config**, which persists to the user settings layer.
+  (default `38745` / `agent-in-browser`). You can also edit these from the DSH Web UI
+  under **Settings → Plugins → Plugin Config**, and the change is saved to the user
+  settings layer.
 - **Extension side**: stored in `chrome.storage.local` (`serverUrl`, `token`, `webuiUrl`),
   editable on the options page.
 
@@ -105,15 +107,15 @@ to DSH, add it to the profile's `dependencies` and `dsh.profile.bundles`, then i
 pnpm add "@chris-003/agent-in-browser@link:/absolute/path/to/agent-in-browser"
 ```
 
-Then ensure `@chris-003/agent-in-browser` is listed in the profile `package.json` under
-`dsh.profile.bundles` (alongside `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app`),
+Then confirm `@chris-003/agent-in-browser` is listed in the profile `package.json` under
+`dsh.profile.bundles` (next to `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app`),
 run `pnpm install`, and **restart/reload the DSH Web UI**. The agent then sees the
 `browser_*` tools and the WS server listens on `127.0.0.1:<port>`.
 
-> **Note on local path deps**: pnpm installs a `link:` local dependency as a **symlink**
-> (and `package-import-method=copy` does not produce a true independent copy for path
-> deps — they stay hard-linked). To install a real copy that is decoupled from your source
-> tree, copy the package into the profile's `node_modules` instead, e.g.
+> **Local path deps**: pnpm installs a `link:` local dependency as a symlink, and
+> `package-import-method=copy` does not produce a true independent copy for path deps
+> (they stay hard-linked). To install a copy that is decoupled from your source tree,
+> copy the package into the profile's `node_modules` instead, e.g.
 > `cp -r agent-in-browser <profile>/node_modules/@chris-003/agent-in-browser`.
 
 ## Agent tools
@@ -128,12 +130,11 @@ run `pnpm install`, and **restart/reload the DSH Web UI**. The agent then sees t
 Besides the production "bundle mount" path, a **dynamic Cordis plugin** is included for
 quick tool-surface testing.
 
-**Important limitation**: a dynamic Host plugin **cannot** host the WebSocket server
-itself — dynamic code cannot `import`/`require` (so no `ws`), and the host has no `crypto`
-builtin to complete the WebSocket handshake. So the dynamic plugin uses
-`ctx.get('subprocess')` to **spawn a standalone Node process**
-(`dynamic/bridge-server.mjs`, which can `import ws`) to run the server; tool calls are
-bridged over that process's stdin/stdout.
+**Important limitation**: a dynamic Host plugin cannot host the WebSocket server itself.
+Dynamic code cannot `import`/`require` (so no `ws`), and the host has no `crypto` builtin
+to complete the WebSocket handshake. So the dynamic plugin uses `ctx.get('subprocess')`
+to spawn a standalone Node process (`dynamic/bridge-server.mjs`, which can `import ws`)
+to run the server; tool calls are bridged over that process's stdin/stdout.
 
 ```bash
 # Run the bridge standalone (no subprocess / DSH mount needed):
@@ -155,8 +156,8 @@ node agent-in-browser/dynamic/bridge-smoke.mjs    # feed commands via stdin -> W
   persistent WS (offscreen).
 - `debugger`: full-page screenshot (`Page.captureScreenshot` + `captureBeyondViewport`).
 - `clipboardWrite`: copy to clipboard.
-- `host_permissions: <all_urls>`: inject scripts into any page. This triggers a broad
-  permission prompt on first load.
+- `host_permissions: <all_urls>`: inject scripts into any page. Chrome shows a broad
+  permission prompt the first time you load the extension.
 
 ## Roadmap
 
