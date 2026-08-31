@@ -2,7 +2,7 @@
 
 Chrome 浏览器插件 + DeepSeek Harness 配套插件，让 DSH 的 agent 能通过 `tool_call` 实时读取/操控用户正在浏览的网页，并可在浏览器侧边栏打开 DSH WebUI（规划中）。
 
-> 当前进度：**M1 最小闭环**已就绪（`browser_get_page` 等工具 + 本地 WebSocket 通道）。M2（WebUI 配置卡片）、M3（扩展完整功能：popup/options/sidepanel + 全部动作）、M4（文档完备）见下文路线图。
+> 当前进度：**M1 最小闭环**（`browser_get_page` 等 + 本地 WebSocket 通道）+ **M3 动作层**（截图 visible/region/full、点击/输入/滚动/按键/选择/等待、导航、标签页管理、storage、复制）已实现并可构建。M2（WebUI 配置卡片）、M3 UI（popup/options/sidepanel）、M4（文档完备）见路线图。
 
 ## 目录结构
 
@@ -97,13 +97,14 @@ bash scripts/dsh-mount.sh --status   # 查看是否已挂载
 
 `browser_get_page`、`browser_read`、`browser_extract`、`browser_find_element`、`browser_list_tabs`、`browser_activate_tab`、`browser_open_tab`、`browser_close_tab`、`browser_screenshot`、`browser_click`、`browser_type`、`browser_scroll`、`browser_navigate`、`browser_press`、`browser_select`、`browser_wait`、`browser_storage`、`browser_copy`。
 
-> M1 已实现在 SW 的动作：`get_page`、`list_tabs`、`activate_tab`、`open_tab`、`close_tab`；其余动作在 M3 填充。
+> 实现状态：`get_page`、`read_page`、`extract`、`find_element`、`list_tabs`、`activate_tab`、`open_tab`、`close_tab`、`screenshot`（visible/region/full）、`click`、`type`、`scroll`、`navigate`、`press`、`select`、`wait`、`storage_get/set`、`copy` 均已在扩展 SW / offscreen 实现。
 
 ## 权限说明（manifest）
 
 - `tabs`、`activeTab`、`scripting`、`storage`、`offscreen`：标签页读取、脚本注入、持久 WS（offscreen）。
-- `host_permissions: <all_urls>`：content script / scripting 注入任意页面。会触发较宽的权限提示，加载时 Chrome 会告知。
-- M3 会增加：`sidePanel`（侧边栏）、`clipboardWrite`（复制到剪贴板）、`debugger`（整页截图）。
+- `debugger`：整页截图（`Page.captureScreenshot` + `captureBeyondViewport`）。
+- `clipboardWrite`：复制到剪贴板。
+- `host_permissions: <all_urls>`：scripting 注入任意页面。会触发较宽的权限提示，加载时 Chrome 会告知。
 
 ## 路线图
 
