@@ -38,11 +38,6 @@ DSH agent ──tool_call──▶ @chris-003/agent-in-browser（Host：WS 服�
 │   │   ├── host/server.js   # WebSocket 服务端（令牌握手/请求-响应/超时）
 │   │   ├── host/tools.js    # 注册 browser_* 新工具（defineTool）
 │   │   └── protocol/types.js# 帧协议与动作常量（与扩展镜像）
-│   ├── dynamic/             # 独立的「用于测试」形态
-│   │   ├── bridge-server.mjs# 独立 WS 服务端 + stdin/stdout 命令桥（可用 node 单独跑）
-│   │   ├── bridge-smoke.mjs # 该桥的端到端冒烟测试
-│   │   └── plugin.host.js   # 动态 Cordis 插件源码（cordis_define 用）
-│   └── test/server.smoke.mjs# 独立通道冒烟测试
 ├── chrome-extension/        # Chrome 扩展（Vite + TS + React，MV3）
 │   ├── public/manifest.json
 │   ├── offscreen.html            # offscreen 文档（裁剪工具，WS 保活）
@@ -69,13 +64,7 @@ npm install          # 若提示 EALLOWSCRIPTS，把 esbuild 加进 allowScripts
 npm run build
 ```
 
-DSH 侧插件（`agent-in-browser/lib/*.js`）是纯 ESM，无需构建。要跑冒烟测试（需要 `ws`），
-在仓库根目录：
-
-```bash
-node agent-in-browser/test/server.smoke.mjs     # 预期输出 [test] PASS
-node agent-in-browser/dynamic/bridge-smoke.mjs  # 桥冒烟测试
-```
+DSH 侧插件（`agent-in-browser/lib/*.js`）是纯 ESM，无需构建。
 
 ## 加载扩展
 
@@ -118,29 +107,6 @@ WS 服务端监听 `127.0.0.1:<port>`。
 `browser_screenshot`、`browser_click`、`browser_type`、`browser_scroll`、`browser_navigate`、
 `browser_press`、`browser_select`、`browser_wait`、`browser_storage`、`browser_copy`。
 
-## 测试用动态 Cordis 插件
-
-除了「作为 bundle 挂载」的生产路径，还提供了一份**动态 Cordis 插件**，用于快速测试工具表面。
-
-**重要限制**：动态 Host 插件**不能**直接充当 WebSocket 服务端。动态代码不能
-`import`/`require`（拿不到 `ws`），且宿主没有 `crypto` 内置，无法完成 WebSocket 握手。
-因此动态插件用 `ctx.get('subprocess')` **spawn 一个独立 Node 进程**
-（`dynamic/bridge-server.mjs`，可以 `import ws`）来跑服务端，工具调用经该进程的
-stdin/stdout 桥接。
-
-```bash
-# 独立运行桥（无需 subprocess / DSH 挂载）：
-node agent-in-browser/dynamic/bridge-server.mjs   # 监听 ws://127.0.0.1:38745
-node agent-in-browser/dynamic/bridge-smoke.mjs    # 经 stdin 喂命令 -> WS -> stdout 回结果
-
-# 动态插件：用 cordis_define 定义，再 cordis_run。它会注册浏览器工具，并在
-# （若 subprocess 已挂载）spawn bridge-server。把 AIB_BRIDGE 环境变量设为你机器上
-# bridge-server.mjs 的绝对路径。
-```
-
-> 如果你的部署未启用 `subprocess` 服务，动态插件只会**注册工具**（可在工具列表里确认），
-> 桥不会自动拉起。请用 **bundle 挂载**（生产路径）或手动运行 `bridge-server.mjs`。
-
 ## Manifest 权限说明
 
 - `tabs`、`activeTab`、`scripting`、`storage`、`offscreen`：标签页读取、脚本注入、
@@ -148,13 +114,6 @@ node agent-in-browser/dynamic/bridge-smoke.mjs    # 经 stdin 喂命令 -> WS ->
 - `debugger`：整页截图（`Page.captureScreenshot` + `captureBeyondViewport`）。
 - `clipboardWrite`：复制到剪贴板。
 - `host_permissions: <all_urls>`：向任意页面注入脚本。首次加载扩展时，Chrome 会弹出较宽的权限提示。
-
-## 路线图
-
-- **M1 最小闭环** ✅：WS 服务端 + 工具注册 + 扩展连接 + `get_page`。
-- **M3 动作层 + UI** ✅：全部动作（截图/DOM 交互/导航/标签页/storage/复制）+ popup/options/sidepanel。
-- **M2 WebUI 配置卡片** ✅：Client 半注册 `settings.plugin.item` 卡片，可在「设置→插件」改端口/令牌；bundle 挂载已验证。
-- **M4 集成与文档** ⬜：断线重连/心跳/超时加固、无连接时可读报错、权限说明、发布说明。
 
 ## 许可证
 

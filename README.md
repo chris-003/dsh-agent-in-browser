@@ -42,11 +42,6 @@ DSH agent ──tool_call──▶ @chris-003/agent-in-browser (Host: WS server 
 │   │   ├── host/server.js   # WebSocket server (token handshake / req-resp / timeout)
 │   │   ├── host/tools.js    # registers the browser_* tools (defineTool)
 │   │   └── protocol/types.js# frame protocol & action constants (mirrored)
-│   ├── dynamic/             # standalone "for testing" form
-│   │   ├── bridge-server.mjs# standalone WS server + stdio command bridge (run with node)
-│   │   ├── bridge-smoke.mjs # end-to-end smoke test for the bridge
-│   │   └── plugin.host.js   # dynamic Cordis plugin source (cordis_define)
-│   └── test/server.smoke.mjs# channel smoke test
 ├── chrome-extension/        # Chrome extension (Vite + TS + React, MV3)
 │   ├── public/manifest.json
 │   ├── offscreen.html            # offscreen document (crop util, WS keep-alive)
@@ -74,12 +69,6 @@ npm run build
 ```
 
 The DSH-side plugin (`agent-in-browser/lib/*.js`) is plain ESM and needs no build.
-To run its smoke tests (needs `ws`), from the repo root:
-
-```bash
-node agent-in-browser/test/server.smoke.mjs     # expect [test] PASS
-node agent-in-browser/dynamic/bridge-smoke.mjs  # bridge smoke
-```
 
 ## Load the extension
 
@@ -125,31 +114,6 @@ run `pnpm install`, and **restart/reload the DSH Web UI**. The agent then sees t
 `browser_screenshot`, `browser_click`, `browser_type`, `browser_scroll`, `browser_navigate`,
 `browser_press`, `browser_select`, `browser_wait`, `browser_storage`, `browser_copy`.
 
-## Testing with the dynamic Cordis plugin
-
-Besides the production "bundle mount" path, a **dynamic Cordis plugin** is included for
-quick tool-surface testing.
-
-**Important limitation**: a dynamic Host plugin cannot host the WebSocket server itself.
-Dynamic code cannot `import`/`require` (so no `ws`), and the host has no `crypto` builtin
-to complete the WebSocket handshake. So the dynamic plugin uses `ctx.get('subprocess')`
-to spawn a standalone Node process (`dynamic/bridge-server.mjs`, which can `import ws`)
-to run the server; tool calls are bridged over that process's stdin/stdout.
-
-```bash
-# Run the bridge standalone (no subprocess / DSH mount needed):
-node agent-in-browser/dynamic/bridge-server.mjs   # listens on ws://127.0.0.1:38745
-node agent-in-browser/dynamic/bridge-smoke.mjs    # feed commands via stdin -> WS -> stdout
-
-# Dynamic plugin: define it with cordis_define, then cordis_run. It registers the
-# browser tools and (if subprocess is mounted) spawns bridge-server. Set the AIB_BRIDGE
-# env var to the absolute path of bridge-server.mjs on your machine.
-```
-
-> If your deployment does not enable the `subprocess` service, the dynamic plugin only
-> registers the tools (you can confirm them in the tool list); the bridge is not auto-started.
-> Use the **bundle mount** (production path) or run `bridge-server.mjs` by hand.
-
 ## Manifest permissions
 
 - `tabs`, `activeTab`, `scripting`, `storage`, `offscreen`: tab reading, script injection,
@@ -158,16 +122,6 @@ node agent-in-browser/dynamic/bridge-smoke.mjs    # feed commands via stdin -> W
 - `clipboardWrite`: copy to clipboard.
 - `host_permissions: <all_urls>`: inject scripts into any page. Chrome shows a broad
   permission prompt the first time you load the extension.
-
-## Roadmap
-
-- **M1 minimal loop** ✅: WS server + tool registration + extension connection + `get_page`.
-- **M3 action layer + UI** ✅: all actions (screenshot/DOM interaction/navigation/tabs/
-  storage/copy) + popup/options/sidepanel.
-- **M2 WebUI config card** ✅: Client half registers the `settings.plugin.item` card to edit
-  port/token under Settings→Plugins; bundle mount verified.
-- **M4 integration & docs** ⬜: reconnect/heartbeat/timeout hardening, no-connection readable
-  errors, permission notes, release notes.
 
 ## License
 
