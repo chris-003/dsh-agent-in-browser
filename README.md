@@ -2,9 +2,10 @@
 
 > **[English](./README.md) | [中文](./README.zh.md)**
 
-A Chrome extension plus a DeepSeek Harness (DSH) plugin. A DSH agent can read and
+A browser extension plus a DeepSeek Harness (DSH) plugin. A DSH agent can read and
 drive the browser you are using through `tool_call`s, and optionally embed the DSH
-Web UI in a side panel.
+Web UI in a side panel. The extension is available for Chrome (Manifest V3) and
+Firefox (Manifest V2); the DSH-side plugin is shared.
 
 ## How it works
 
@@ -55,6 +56,18 @@ DSH agent ──tool_call──▶ @chris-003/agent-in-browser (Host: WS server 
 │       ├── popup/main.tsx               # connection status + side-panel + options entry
 │       ├── options/main.tsx             # server URL / token / WebUI URL config
 │       └── sidepanel/main.tsx           # embedded DSH Web UI iframe
+├── firefox-extension/       # Firefox extension (Vite + TS + React, MV2)
+│   ├── public/manifest.json
+│   ├── background.html             # persistent background page (DOM + canvas crop)
+│   ├── popup.html / options.html   # popup / options pages
+│   ├── sidepanel.html              # side panel (embeds the DSH Web UI)
+│   ├── vite.config.ts / tsconfig.json / package.json
+│   └── src/
+│       ├── protocol/types.ts            # protocol mirror (+ ScreenshotResult)
+│       ├── background/background.ts     # all action routing + tab/window-level processing
+│       ├── popup/main.tsx               # connection status + sidebar + options entry
+│       ├── options/main.tsx             # server URL / token / WebUI URL config
+│       └── sidepanel/main.tsx           # embedded DSH Web UI iframe
 └── README.md
 ```
 
@@ -68,14 +81,31 @@ npm install          # if EALLOWSCRIPTS, add esbuild to allowScripts / .npmrc al
 npm run build
 ```
 
+Build the Firefox extension (Vite bundle → `firefox-extension/dist/`):
+
+```bash
+cd firefox-extension
+npm install          # if EALLOWSCRIPTS, add esbuild to allowScripts / .npmrc allow-scripts
+npm run build
+```
+
 The DSH-side plugin (`agent-in-browser/lib/*.js`) is plain ESM and needs no build.
 
 ## Load the extension
+
+**Chrome:**
 
 1. Open `chrome://extensions/`, turn on **Developer mode**.
 2. **Load unpacked** → select `chrome-extension/dist`.
 3. Confirm there are no errors. The extension connects to `ws://127.0.0.1:38745`
    (token `agent-in-browser`) by default, or to whatever you set on the options page.
+
+**Firefox:**
+
+1. Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**.
+2. Select `firefox-extension/dist/manifest.json`.
+3. A temporary add-on stays loaded until you restart Firefox. For a permanent
+   install, sign the extension and install it from `about:addons`.
 
 ## Configuration (keep both sides aligned)
 
@@ -116,12 +146,25 @@ run `pnpm install`, and **restart/reload the DSH Web UI**. The agent then sees t
 
 ## Manifest permissions
 
+**Chrome (MV3):**
+
 - `tabs`, `activeTab`, `scripting`, `storage`, `offscreen`: tab reading, script injection,
   persistent WS (offscreen).
 - `debugger`: full-page screenshot (`Page.captureScreenshot` + `captureBeyondViewport`).
 - `clipboardWrite`: copy to clipboard.
 - `host_permissions: <all_urls>`: inject scripts into any page. Chrome shows a broad
   permission prompt the first time you load the extension.
+
+**Firefox (MV2):**
+
+- `tabs`, `activeTab`, `storage`: tab reading, script injection (via `tabs.executeScript`),
+  persistent WS (the background page, `background.page`, is always alive).
+- `clipboardWrite`, `<all_urls>`: copy to clipboard; inject scripts into any page. MV2
+  merges host matches into `permissions` (there is no `host_permissions` key).
+- There is no `offscreen` or `debugger` permission. The region crop runs on the
+  background page's own DOM, and `full` screenshots are degraded to a visible-area
+  capture (Firefox exposes no `Page.captureScreenshot` + `captureBeyondViewport`
+  equivalent here), so the result carries a `note` field describing the degradation.
 
 ## License
 
