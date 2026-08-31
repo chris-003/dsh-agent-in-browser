@@ -138,7 +138,9 @@ window.__ModuleLoader__.load({
             React.createElement('span', { className: 'aib-description' }, 'WebSocket 服务端地址与令牌'),
           ),
           dirty ? React.createElement('span', { className: 'aib-badge' }, '未保存') : null,
-          React.createElement('span', { className: 'aib-chevron ' + (open ? 'aib-chevronOpen' : '') }, '▾'),
+          React.createElement('svg', { className: 'aib-chevron ' + (open ? 'aib-chevronOpen' : ''), width: 14, height: 14, viewBox: '0 0 14 14', fill: 'none', 'aria-hidden': true },
+            React.createElement('path', { d: 'M3.5 5.5L7 9L10.5 5.5', stroke: 'currentColor', strokeWidth: 1.2, strokeLinecap: 'round', strokeLinejoin: 'round' }),
+          ),
         ),
         open
           ? React.createElement('div', { className: 'aib-body' },
