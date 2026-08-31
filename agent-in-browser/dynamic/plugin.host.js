@@ -7,14 +7,18 @@
 // so it cannot host the socket itself; the child process can.
 //
 // Put this function body into `cordis_define`'s `code.host`. Adjust BRIDGE to
-// the absolute path of `bridge-server.mjs` on your machine.
+// the location of `bridge-server.mjs` on your machine.
 return {
   name: 'agent-in-browser',
   inject: [],
   apply(ctx) {
     const subprocess = ctx.get('subprocess')
-    // Change to the real location of bridge-server.mjs if you moved the repo.
-    const BRIDGE = '/home/chris/Project/mooc/agent-in-browser/dynamic/bridge-server.mjs'
+    // Resolve bridge-server.mjs without hard-coding a local path. Set the
+    // AIB_BRIDGE env var to the absolute path on your machine; the fallback
+    // names the file relative to the current working directory (your DSH
+    // process's cwd), which is right when the plugin runs from the repo root.
+    // Dynamic host code can't `import`/`require`, so keep this to env + cwd.
+    const BRIDGE = process.env.AIB_BRIDGE || 'agent-in-browser/dynamic/bridge-server.mjs'
     let handle = null
     let buffer = ''
     let seq = 0

@@ -1,140 +1,173 @@
-# agent-in-browser
+# dsh-agent-in-browser
 
-Chrome 浏览器插件 + DeepSeek Harness 配套插件，让 DSH 的 agent 能通过 `tool_call` 实时读取/操控用户正在浏览的网页，并可在浏览器侧边栏打开 DSH WebUI（规划中）。
+A Chrome extension + DeepSeek Harness (DSH) companion plugin that lets a DSH agent
+read and drive the browser you are actually using, in real time, through ordinary
+`tool_call`s — and optionally embeds the DSH Web UI in a browser side panel.
 
-> 当前进度：**M1 最小闭环**（`browser_get_page` 等 + 本地 WebSocket 通道）、**M3 动作层**（截图、DOM 交互、导航、标签页、storage、复制）、**M3 UI**（popup / options / sidepanel 内嵌 DSH WebUI）均已实现并可构建。M2（WebUI 配置卡片）、M4（文档完备）见路线图。
+中文简介：让 DSH 的 agent 能通过 `tool_call` 实时读取/操控你当前浏览的网页（截图、DOM 交互、导航、标签页、storage、复制），并可在浏览器侧边栏内嵌 DSH WebUI。
 
-## 目录结构
+## How it works
+
+Manifest V3 extensions **cannot listen on a TCP/WebSocket port** (`chrome.sockets.tcpServer`
+is a deprecated Chrome Apps API), so the extension acts as a WebSocket **client**
+and actively connects to a server hosted by the DSH side. Once connected the
+channel is bidirectional: the agent sends commands via `tool_call`, the extension
+executes them and replies.
 
 ```
-mooc/
-├── agent-in-browser/        # DSH 配套 bundle 包 @chris/agent-in-browser
-│   ├── package.json         # 含 dsh.bundle.patch = ./cordis.patch.yml
-│   ├── cordis.patch.yml     # 挂载 agent-in-browser 插件行
+DSH agent ──tool_call──▶ @chris/agent-in-browser (Host: WS server @127.0.0.1:port)
+   Host plugin ◀──── WebSocket (persistent, token handshake + heartbeat) ──── Chrome extension
+                                                                        │
+                                          ┌─────────────────────────────┴──────────────┐
+                                          │ service-worker: tab/window-level actions    │
+                                          │ content-script: page DOM interaction        │
+                                          └──────────────────────────────────────────────┘
+```
+
+- **Frame protocol** — request `{type:'command', id, action, params}` → response
+  `{type:'result', id, ok, data|error}`; handshake `{type:'hello', token, version, actions}`;
+  heartbeat `ping/pong`. Constants live in `agent-in-browser/lib/protocol/types.js` and
+  `chrome-extension/src/protocol/types.ts` (**keep the two mirrored copies in sync**).
+
+## Repository layout
+
+```
+.
+├── agent-in-browser/        # DSH bundle package @chris/agent-in-browser
+│   ├── package.json         # dsh.bundle.patch = ./cordis.patch.yml
+│   ├── cordis.patch.yml     # mounts the agent-in-browser plugin row
 │   ├── lib/
-│   │   ├── index.js         # 插件入口 { name, inject, apply }
-│   │   ├── host/server.js   # WebSocket 服务端（令牌握手/请求-响应/超时）
-│   │   ├── host/tools.js    # 注册 browser_* 新工具（defineTool）
-│   │   └── protocol/types.js# 帧协议与动作常量（与扩展镜像）
-│   ├── dynamic/
-│   │   ├── bridge-server.mjs# 独立 WS 服务端 + stdin/stdout 命令桥（可单独 `node` 跑）
-│   │   ├── bridge-smoke.mjs # 该桥的端到端冒烟测试（已 PASS）
-│   │   └── plugin.host.js   # 「用于测试」的动态 Cordis 插件源码（cordis_define 用）
-│   └── test/server.smoke.mjs# 独立通道冒烟测试
-├── chrome-extension/        # Chrome 扩展（Vite+TS+React，MV3）
+│   │   ├── index.js         # plugin entry { name, inject, apply }
+│   │   ├── host/server.js   # WebSocket server (token handshake / req-resp / timeout)
+│   │   ├── host/tools.js    # registers the browser_* tools (defineTool)
+│   │   └── protocol/types.js# frame protocol & action constants (mirrored)
+│   ├── dynamic/             # standalone "for testing" form
+│   │   ├── bridge-server.mjs# standalone WS server + stdio command bridge (run with node)
+│   │   ├── bridge-smoke.mjs # end-to-end smoke test for the bridge
+│   │   └── plugin.host.js   # dynamic Cordis plugin source (cordis_define)
+│   └── test/server.smoke.mjs# channel smoke test
+├── chrome-extension/        # Chrome extension (Vite + TS + React, MV3)
 │   ├── public/manifest.json
-│   ├── offscreen.html            # 内嵌 DSH WebUI 的侧边栏（M3）
-│   ├── popup.html / options.html # 弹窗 / 选项页（M3）
+│   ├── offscreen.html            # offscreen document (crop util, WS keep-alive)
+│   ├── popup.html / options.html # popup / options pages
+│   ├── sidepanel.html            # side panel (embeds the DSH Web UI)
 │   ├── vite.config.ts / tsconfig.json / package.json
 │   └── src/
-│       ├── protocol/types.ts    # 协议镜像
-│       ├── background/service-worker.ts  # 全部动作命令路由 + 标签页/窗口级处理
-│       ├── offscreen/offscreen.ts        # 持持久 WebSocket 连接 + 区域截图裁剪
-│       ├── popup/main.tsx        # 连接状态 + 「在侧边栏中打开」+ 选项入口
-│       ├── options/main.tsx      # 服务地址/令牌/WebUI 地址配置
-│       └── sidepanel/main.tsx    # 内嵌 DSH WebUI 的 iframe
-├── scripts/dsh-mount.sh     # 由你运行：把 bundle 挂进 DSH web profile
+│       ├── protocol/types.ts            # protocol mirror
+│       ├── background/service-worker.ts # all action routing + tab/window-level processing
+│       ├── offscreen/offscreen.ts       # region screenshot crop util
+│       ├── popup/main.tsx               # connection status + side-panel + options entry
+│       ├── options/main.tsx             # server URL / token / WebUI URL config
+│       └── sidepanel/main.tsx           # embedded DSH Web UI iframe
+├── scripts/dsh-mount.sh     # mount the bundle into the DSH web profile
 └── README.md
 ```
 
-## 架构
+## Build
 
-```
-DSH agent ──tool_call──▶ @chris/agent-in-browser（Host：WS 服务端 @127.0.0.1:port）
-   Host 插件 ◀──── WebSocket（持久双向，令牌握手+心跳）──── Chrome 扩展
-                                                            │
-                                    ┌───────────────────────┴──────────────┐
-                                    │ service-worker：标签页/窗口级动作     │
-                                    │ (M3) content-script：页面 DOM 交互   │
-                                    └───────────────────────────────────────┘
-```
-
-- **为什么选这个方向**：Manifest V3 扩展**不能监听端口**（`chrome.sockets.tcpServer` 是已废弃的 Chrome Apps API），所以让扩展作为 WebSocket **客户端**主动连到 DSH 侧的服务端。连接建立后是双向的：agent 通过 `tool_call` 下发命令，扩展执行后回传。
-- **帧协议**：请求 `{type:'command', id, action, params}` → 响应 `{type:'result', id, ok, data|error}`；握手 `{type:'hello', token, version, actions}`；心跳 `ping/pong`。常量见 `agent-in-browser/lib/protocol/types.js` 与 `chrome-extension/src/protocol/types.ts`（**两处需保持同步**）。
-
-## 安装（由你执行）
-
-依赖由你在自己的 shell 里安装。该环境用 `allow-scripts` 白名单（已含 `esbuild`），`package.json` 里已放 `allowScripts: ["esbuild"]`。
-
-### 1. 构建 DSH 插件（宿主侧为纯 ESM，无需打包）
-
-`@chris/agent-in-browser/lib/*.js` 就是可运行源码，直接使用，无需构建。若要跑冒烟测试（需 `ws`），在 `mooc` 下确保能解析 `ws`/`@deepseek-ai/dsh-tools`：
-
-```bash
-cd mooc
-node agent-in-browser/test/server.smoke.mjs   # 预期输出 [test] PASS
-```
-
-### 2. 构建 Chrome 扩展
+Build the Chrome extension (Vite bundle → `chrome-extension/dist/`):
 
 ```bash
 cd chrome-extension
-npm install          # 若提示 EALLOWSCRIPTS，把 esbuild 加进 allowScripts / .npmrc 的 allow-scripts
-npm run build        # 产物在 dist/
+npm install          # if EALLOWSCRIPTS, add esbuild to allowScripts / .npmrc allow-scripts
+npm run build
 ```
 
-## 加载扩展
-
-1. 打开 `chrome://extensions/`，开启右上角「开发者模式」。
-2. 「加载已解压的扩展程序」→ 选择 `chrome-extension/dist`。
-3. 确认扩展无报错；扩展会自动用默认配置连到 `ws://127.0.0.1:38745`（令牌 `agent-in-browser`）。
-
-## 配置（两侧对齐）
-
-- **DSH 侧**：`agent-in-browser/cordis.patch.yml` 里的 `config.port` / `config.token`（默认 `38745` / `agent-in-browser`）。
-- **扩展侧**：默认 `ws://127.0.0.1:38745` + 令牌 `agent-in-browser`。扩展用 `chrome.storage.local` 存 `serverUrl` 与 `token`（M3 的 options 页可改；暂用默认值即可对齐）。
-
-## 挂载 DSH 插件
-
-在**你自己的 shell** 里运行（它写入 `~/.dsh`，agent 沙箱无权访问）：
+The DSH-side plugin (`agent-in-browser/lib/*.js`) is plain ESM and needs no build.
+To run its smoke tests (needs `ws`), from the repo root:
 
 ```bash
-cd mooc
-bash scripts/dsh-mount.sh            # 挂载（幂等）
-bash scripts/dsh-mount.sh --status   # 查看是否已挂载
+node agent-in-browser/test/server.smoke.mjs     # expect [test] PASS
+node agent-in-browser/dynamic/bridge-smoke.mjs  # bridge smoke
 ```
 
-脚本会把 `@chris/agent-in-browser` 加入 web profile 的 `dependencies`（`link:</abs/path>`）与 `dsh.profile.bundles`，然后在 profile 目录 `pnpm install`（无 pnpm 则退回 npm）。随后**重启/刷新 DSH Web UI**，插件生效：agent 工具列表出现 `browser_*` 工具，WS 服务端监听 `127.0.0.1:<port>`。
+## Load the extension
 
-## 验证（M1）
+1. Open `chrome://extensions/`, turn on **Developer mode**.
+2. **Load unpacked** → select `chrome-extension/dist`.
+3. Confirm there are no errors. The extension auto-connects to `ws://127.0.0.1:38745`
+   (token `agent-in-browser`) with its defaults, or the values set on the options page.
 
-1. 扩展已连上 DSH（端口默认 `38745`）。
-2. 在 agent 会话调用 `browser_get_page` → 返回当前激活标签页的 URL / 标题 / 描述 / 选中文本。
+## Configuration (keep both sides aligned)
 
-## agent 工具清单
+- **DSH side**: `agent-in-browser/cordis.patch.yml` → `config.port` / `config.token`
+  (default `38745` / `agent-in-browser`). These can also be edited from the DSH Web UI
+  under **设置 → 插件 → 插件配置**, which persists to the user settings layer.
+- **Extension side**: stored in `chrome.storage.local` (`serverUrl`, `token`, `webuiUrl`),
+  editable on the options page (M3).
 
-`browser_get_page`、`browser_read`、`browser_extract`、`browser_find_element`、`browser_list_tabs`、`browser_activate_tab`、`browser_open_tab`、`browser_close_tab`、`browser_screenshot`、`browser_click`、`browser_type`、`browser_scroll`、`browser_navigate`、`browser_press`、`browser_select`、`browser_wait`、`browser_storage`、`browser_copy`。
+## Mount the DSH plugin
 
-> 实现状态：`get_page`、`read_page`、`extract`、`find_element`、`list_tabs`、`activate_tab`、`open_tab`、`close_tab`、`screenshot`（visible/region/full）、`click`、`type`、`scroll`、`navigate`、`press`、`select`、`wait`、`storage_get/set`、`copy` 均已在扩展 SW / offscreen 实现。
-
-## 测试用动态 Cordis 插件
-
-除了「作为 bundle 挂载」的生产路径，还提供了一份**动态 Cordis 插件**（`cordis_define` 即用）供快速测试工具表面。
-
-**重要限制**：动态 Host 插件**不能**直接充当 WebSocket 服务端——动态代码禁止 `import`/`require`（拿不到 `ws`），且宿主没有 `crypto` 内置，无法手工完成 WebSocket 握手（HTTP-upgrade 由 `webServer` 交回裸 `Duplex` socket）。因此动态插件用 `ctx.get('subprocess')` **spawn 一个独立 Node 进程**（`dynamic/bridge-server.mjs`，可 `import ws`）来跑服务端，工具调用经该进程的 stdin/stdout 桥接。
+From your own shell (it writes to `~/.dsh`, which the agent sandbox cannot touch):
 
 ```bash
-# 1) 独立跑 bridge（不依赖 subprocess / DSH 挂载）——已验证：
-node agent-in-browser/dynamic/bridge-server.mjs            # 监听 ws://127.0.0.1:38745
-node agent-in-browser/dynamic/bridge-smoke.mjs             # 冒烟：stdin 喂命令 → WS → stdout 回结果
-
-# 2) 动态插件：用 cordis_define 定义 cold 后 cordis_run，
-#    它会注册浏览器工具并（若 subprocess 已挂载）spawn bridge-server。
-#    源码见 agent-in-browser/dynamic/plugin.host.js（已在本会话成功注册全部 browser_* 工具）。
+bash scripts/dsh-mount.sh            # mount (idempotent)
+bash scripts/dsh-mount.sh --status   # check mount state
 ```
 
-> ⚠️ 当前部署未启用 `subprocess` 服务，因此动态插件在本机只**注册了工具**（已验证出现在工具列表），bridge 不会自动拉起；实际通道请用 **bundle 挂载**（生产路径）或手动运行 `bridge-server.mjs`。
+The script adds `@chris/agent-in-browser` to the web profile's `dependencies`
+(`link:<abs path>`) and `dsh.profile.bundles`, then runs `pnpm install` (or `npm install`
+fallback) in the profile dir. Then **restart/reload the DSH Web UI** for the plugin to
+take effect: the agent sees the `browser_*` tools and the WS server listens on
+`127.0.0.1:<port>`.
 
-## 权限说明（manifest）
+> To install a physical copy instead of a symlink, copy the package into the profile's
+> `node_modules` (e.g. `cp -r agent-in-browser <profile>/node_modules/@chris/agent-in-browser`)
+> rather than relying on the `link:` dependency. pnpm turns local path deps into hard links,
+> so `package-import-method=copy` does not give you a true independent copy.
 
-- `tabs`、`activeTab`、`scripting`、`storage`、`offscreen`：标签页读取、脚本注入、持久 WS（offscreen）。
-- `debugger`：整页截图（`Page.captureScreenshot` + `captureBeyondViewport`）。
-- `clipboardWrite`：复制到剪贴板。
-- `host_permissions: <all_urls>`：scripting 注入任意页面。会触发较宽的权限提示，加载时 Chrome 会告知。
+## Agent tools
 
-## 路线图
+`browser_get_page`, `browser_read`, `browser_extract`, `browser_find_element`,
+`browser_list_tabs`, `browser_activate_tab`, `browser_open_tab`, `browser_close_tab`,
+`browser_screenshot`, `browser_click`, `browser_type`, `browser_scroll`, `browser_navigate`,
+`browser_press`, `browser_select`, `browser_wait`, `browser_storage`, `browser_copy`.
 
-- **M1 最小闭环** ✅：WS 服务端 + 工具注册 + 扩展 offscreen 连接 + `get_page`。
-- **M3 动作层 + UI** ✅：全部动作（截图/DOM 交互/导航/标签页/storage/复制）+ popup/options/sidepanel。
-- **M2 WebUI 配置卡片** ⬜：Client 半注册 `settings.plugin.item` 卡片，可在「设置→插件」改端口/令牌；验证 bundle 挂载。
-- **M4 集成与文档** ⬜：断线重连/心跳/超时、无连接可读报错、权限说明、发布说明。
+## Testing with the dynamic Cordis plugin
+
+Besides the production "bundle mount" path, a **dynamic Cordis plugin** is included for
+quick tool-surface testing.
+
+**Important limitation**: a dynamic Host plugin **cannot** host the WebSocket server
+itself — dynamic code cannot `import`/`require` (so no `ws`), and the host has no `crypto`
+builtin to complete the WebSocket handshake. So the dynamic plugin uses
+`ctx.get('subprocess')` to **spawn a standalone Node process**
+(`dynamic/bridge-server.mjs`, which can `import ws`) to run the server; tool calls are
+bridged over that process's stdin/stdout.
+
+```bash
+# Run the bridge standalone (no subprocess / DSH mount needed):
+node agent-in-browser/dynamic/bridge-server.mjs   # listens on ws://127.0.0.1:38745
+node agent-in-browser/dynamic/bridge-smoke.mjs    # feed commands via stdin -> WS -> stdout
+
+# Dynamic plugin: define it with cordis_define, then cordis_run. It registers the
+# browser tools and (if subprocess is mounted) spawns bridge-server. Set the AIB_BRIDGE
+# env var to the absolute path of bridge-server.mjs on your machine.
+```
+
+> If your deployment does not enable the `subprocess` service, the dynamic plugin only
+> registers the tools (you can confirm them in the tool list); the bridge is not auto-started.
+> Use the **bundle mount** (production path) or run `bridge-server.mjs` by hand.
+
+## Manifest permissions
+
+- `tabs`, `activeTab`, `scripting`, `storage`, `offscreen`: tab reading, script injection,
+  persistent WS (offscreen).
+- `debugger`: full-page screenshot (`Page.captureScreenshot` + `captureBeyondViewport`).
+- `clipboardWrite`: copy to clipboard.
+- `host_permissions: <all_urls>`: inject scripts into any page. This triggers a broad
+  permission prompt on first load.
+
+## Roadmap
+
+- **M1 minimal loop** ✅: WS server + tool registration + extension connection + `get_page`.
+- **M3 action layer + UI** ✅: all actions (screenshot/DOM interaction/navigation/tabs/
+  storage/copy) + popup/options/sidepanel.
+- **M2 WebUI config card** ✅: Client half registers the `settings.plugin.item` card to edit
+  port/token under 设置→插件; bundle mount verified.
+- **M4 integration & docs** ⬜: reconnect/heartbeat/timeout hardening, no-connection readable
+  errors, permission notes, release notes.
+
+## License
+
+[MIT](./LICENSE)
