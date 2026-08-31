@@ -71,7 +71,7 @@ window.__ModuleLoader__.load({
       const scope = props.scope
       const [snap, setSnap] = React.useState(scope.getSnapshot())
       const [drafts, setDrafts] = React.useState({})
-      const [open, setOpen] = React.useState(true)
+      const [open, setOpen] = React.useState(false)
       React.useEffect(() => scope.subscribe(() => setSnap(scope.getSnapshot())), [scope])
 
       const value = snap.value || {}
