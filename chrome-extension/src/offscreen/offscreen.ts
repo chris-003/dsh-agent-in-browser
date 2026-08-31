@@ -104,9 +104,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 })
 
-// Utility requests from the service worker (e.g. crop a visible screenshot).
+// Utility requests from the service worker (e.g. crop a visible screenshot),
+// plus manual-reconnect triggers from the popup.
 chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
-  if (!msg || msg.kind !== 'util') return false
+  if (!msg) return false
+  if (msg.kind === 'RECONNECT') {
+    ws?.close() // onclose schedules a reconnect
+    sendResponse({ ok: true })
+    return false
+  }
+  if (msg.kind !== 'util') return false
   if (msg.util === 'crop') {
     cropImage(msg.dataUrl, msg.x, msg.y, msg.width, msg.height)
       .then((base64) => sendResponse({ ok: true, data: base64 }))

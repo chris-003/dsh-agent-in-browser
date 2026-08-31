@@ -18,6 +18,12 @@ function App() {
     await chrome.sidePanel.open(tab?.windowId ? { windowId: tab.windowId } : {})
   }
 
+  const reconnect = async () => {
+    await chrome.runtime.sendMessage({ kind: 'RECONNECT' })
+    // refresh the status readout after a short delay
+    setTimeout(() => chrome.storage.local.get(['connected', 'serverUrl']).then((v) => setS((s) => ({ ...s, ...(v as State) }))), 1000)
+  }
+
   return (
     <div>
       <h1>agent-in-browser</h1>
@@ -30,6 +36,11 @@ function App() {
         <button onClick={() => chrome.runtime.openOptionsPage()}>选项</button>
         <button onClick={openSidePanel}>在侧边栏中打开</button>
       </div>
+      {!s.connected && (
+        <div className="row">
+          <button onClick={reconnect}>重新连接</button>
+        </div>
+      )}
       <p className="muted">在「选项」里配置 DSH 服务地址与令牌；在「在侧边栏中打开」可侧边栏内嵌 DSH WebUI。</p>
     </div>
   )
